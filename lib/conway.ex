@@ -12,11 +12,14 @@ defmodule Conway do
 
   defrecord Board, width: 0, height: 0, field: nil
 
-  def generage_board() do
+  @doc """
+  return a Board record with the default width and height
+  """
+  def generate_board() do
     generate_board @default_width, @default_height
   end
 
-  @log """
+  @doc """
     returns a board Record
 
   """
@@ -26,20 +29,23 @@ defmodule Conway do
     Board.new width: width, height: height, field: field
   end
 
+  # return a list of true/false cells for the given length.
+  def build_field( length, acc ) when length > 0 do
+    build_field length - 1, [ new_cell | acc ]
+  end
+
   def build_field( 0, acc ) do
     acc
   end
 
-  def build_field( length, acc ) do
-    build_field length - 1, [ new_cell | acc ]
-  end
 
-  def new_cell do
+  # returns a random true/false
+  defp new_cell do
     :random.uniform > 0.5
   end
 
   @doc """
-  print the board out and recursively step through it
+  print the board out and step through lifecycles indefinitely
 
     iex> Conway.run Conway.generate_board(75, 30)
   """
@@ -51,28 +57,36 @@ defmodule Conway do
       |> run
   end
 
+  @doc """
+  step through one generation of the board, returning the board with the updated field.
+  """
   def step( board ) do
-    board.field step( board, board.field, [] )
+    board.field do_step( board, board.field, [] )
   end
 
-  def step( board, [], acc ) do
+  defp do_step( board, [], acc ) do
     Enum.reverse acc
   end
 
-  def step( board, [ current | field ], acc ) do
-    step board, field, [ apply_rule( current, count_neighbors( board, length(acc) )) | acc ]
+  defp do_step( board, [ current | field ], acc ) do
+    do_step board, field, [ apply_rule( current, count_neighbors( board, length(acc) )) | acc ]
   end
 
-  # go through board, spit out rows with either * or _
+  @doc """
+  go through board, spit out rows with either * or _ for live for dead cells, repectively
+  """
   def print_board( board ) do
     do_print_board( board, board.field, [] )
     IO.puts ""
     IO.puts ""
   end
 
-  defp do_print_board( board, [], line ), do: :ok
+  defp do_print_board( board, [], line ) do
+    IO.puts Enum.join(line)
+  end
 
   defp do_print_board( board, [ cell | list ], line) do
+    # print the line and set line to empty list if it's the width of the board.
     line = if length(line) == board.width do
       IO.puts Enum.join(line)
       []
@@ -83,10 +97,13 @@ defmodule Conway do
     do_print_board( board, list, [ do_print_cell(cell) | line ])
   end
 
+  # cell characters.
   defp do_print_cell( true ), do: '*'
   defp do_print_cell( false), do: '_'
 
-
+  @doc """
+    given the board and an offset, return the number of neighbors this cell has.
+  """
   def count_neighbors( board, offset ) do
     Enum.count [
       Enum.at( board.field, offset_for(board,offset - board.width - 1) ),
@@ -100,6 +117,10 @@ defmodule Conway do
     ], fn(x) -> x end
   end
 
+  @doc """
+  given the board and an offset, return the offset in the board.field for the given offset
+  this is where wrapping of the board is handled.
+  """
   def offset_for( board, offset ) do
     offset_for offset, board.width, board.height
   end
@@ -108,6 +129,7 @@ defmodule Conway do
   def offset_for( offset, width, height ) when offset > width * height - 1, do: ( offset - (width * height) )
   def offset_for( offset, _, _ ), do: offset
 
+  # the actual rules for the game.
   def apply_rule( true, neighbor_count ) when neighbor_count < 2, do: false
   def apply_rule( true, neighbor_count ) when neighbor_count <= 3, do: true
   def apply_rule( true, neighbor_count ) when neighbor_count > 3, do: false
