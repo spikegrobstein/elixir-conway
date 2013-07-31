@@ -1,5 +1,6 @@
 # Conway
 
+    $ iex -S mix
     iex> Conway.run Conway.generate_board(75, 30)
 
 Terminal based (for now) Conway's game of life simulator.
