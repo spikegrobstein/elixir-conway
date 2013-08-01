@@ -73,7 +73,7 @@ defmodule Conway do
 
   defp do_step( board, [ current | field ], acc ) do
     { :cell, index, state } = current
-    
+
     updated_cell_state = apply_rule( state, count_neighbors( board, length(acc) ))
 
     cell = { :cell, index, updated_cell_state }
@@ -126,21 +126,6 @@ defmodule Conway do
       Enum.at( field, offset_for(offset + width, width, height) ),
       Enum.at( field, offset_for(offset + width + 1, width, height) )
     ]
-
-    # IO.puts "w: #{ width } h: #{ height }"
-
-    # IO.puts inspect([
-      # offset_for(offset - width - 1, width, height),
-      # offset_for(offset - width, width, height),
-      # offset_for(offset - width + 1, width, height),
-      # offset_for(offset - 1, width, height),
-      # offset_for(offset + 1, width, height),
-      # offset_for(offset + width - 1, width, height),
-      # offset_for(offset + width, width, height),
-      # offset_for(offset + width + 1, width, height)
-    # ])
-    # IO.puts inspect(field)
-    # IO.puts inspect(neighbors)
 
     Enum.count neighbors, fn(x) ->
       { :cell, _index, state } = x
