@@ -31,7 +31,7 @@ defmodule Conway do
 
   # return a list of true/false cells for the given length.
   def build_field( length, acc ) when length > 0 do
-    build_field length - 1, [ new_cell | acc ]
+    build_field length - 1, [ new_cell( length(acc) ) | acc ]
   end
 
   def build_field( 0, acc ) do
@@ -39,9 +39,11 @@ defmodule Conway do
   end
 
 
-  # returns a random true/false
-  defp new_cell do
-    :random.uniform > 0.5
+  # returns a tuple representing a cell and assigns it the given index (for sorting in the field)
+  # tuple is in format of:
+  # { :cell, index, true||false }
+  defp new_cell( index ) do
+    { :cell, index, :random.uniform > 0.5 }
   end
 
   @doc """
@@ -61,15 +63,22 @@ defmodule Conway do
   step through one generation of the board, returning the board with the updated field.
   """
   def step( board ) do
-    board.field do_step( board, board.field, [] )
+    field = do_step( board, board.field, [] )
+    board.field field
   end
 
-  defp do_step( board, [], acc ) do
+  defp do_step( _board, [], acc ) do
     Enum.reverse acc
   end
 
   defp do_step( board, [ current | field ], acc ) do
-    do_step board, field, [ apply_rule( current, count_neighbors( board, length(acc) )) | acc ]
+    { :cell, index, state } = current
+    
+    updated_cell_state = apply_rule( state, count_neighbors( board, length(acc) ))
+
+    cell = { :cell, index, updated_cell_state }
+
+    do_step board, field, [ cell | acc ]
   end
 
   @doc """
@@ -98,35 +107,53 @@ defmodule Conway do
   end
 
   # cell characters.
-  defp do_print_cell( true ), do: '*'
-  defp do_print_cell( false), do: '_'
+  defp do_print_cell( { :cell, _, true } ), do: '*'
+  defp do_print_cell( { :cell, _, false } ), do: '_'
 
   @doc """
     given the board and an offset, return the number of neighbors this cell has.
   """
   def count_neighbors( board, offset ) do
-    Enum.count [
-      Enum.at( board.field, offset_for(board,offset - board.width - 1) ),
-      Enum.at( board.field, offset_for(board,offset - board.width) ),
-      Enum.at( board.field, offset_for(board,offset - board.width + 1) ),
-      Enum.at( board.field, offset_for(board,offset - 1) ),
-      Enum.at( board.field, offset_for(board,offset + 1) ),
-      Enum.at( board.field, offset_for(board,offset + board.width - 1) ),
-      Enum.at( board.field, offset_for(board,offset + board.width) ),
-      Enum.at( board.field, offset_for(board,offset + board.width + 1) )
-    ], fn(x) -> x end
+    { width, height, field } = { board.width, board.height, board.field }
+
+    neighbors = [
+      Enum.at( field, offset_for(offset - width - 1, width, height) ),
+      Enum.at( field, offset_for(offset - width, width, height) ),
+      Enum.at( field, offset_for(offset - width + 1, width, height) ),
+      Enum.at( field, offset_for(offset - 1, width, height) ),
+      Enum.at( field, offset_for(offset + 1, width, height) ),
+      Enum.at( field, offset_for(offset + width - 1, width, height) ),
+      Enum.at( field, offset_for(offset + width, width, height) ),
+      Enum.at( field, offset_for(offset + width + 1, width, height) )
+    ]
+
+    # IO.puts "w: #{ width } h: #{ height }"
+
+    # IO.puts inspect([
+      # offset_for(offset - width - 1, width, height),
+      # offset_for(offset - width, width, height),
+      # offset_for(offset - width + 1, width, height),
+      # offset_for(offset - 1, width, height),
+      # offset_for(offset + 1, width, height),
+      # offset_for(offset + width - 1, width, height),
+      # offset_for(offset + width, width, height),
+      # offset_for(offset + width + 1, width, height)
+    # ])
+    # IO.puts inspect(field)
+    # IO.puts inspect(neighbors)
+
+    Enum.count neighbors, fn(x) ->
+      { :cell, _index, state } = x
+      state
+    end
   end
 
   @doc """
   given the board and an offset, return the offset in the board.field for the given offset
   this is where wrapping of the board is handled.
   """
-  def offset_for( board, offset ) do
-    offset_for offset, board.width, board.height
-  end
-
-  def offset_for( offset, width, height ) when offset < 0, do: ( (width * height) - offset )
-  def offset_for( offset, width, height ) when offset > width * height - 1, do: ( offset - (width * height) )
+  def offset_for( offset, width, height ) when offset < 0, do: ( (width * height) + offset )
+  def offset_for( offset, width, height ) when offset > (width * height - 1), do: ( offset - (width * height) )
   def offset_for( offset, _, _ ), do: offset
 
   # the actual rules for the game.
