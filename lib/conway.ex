@@ -31,7 +31,7 @@ defmodule Conway do
 
   # return a list of true/false cells for the given length.
   def build_field( length ) when length > 0 do
-    Enum.map 1..length, fn(x) -> new_cell end
+    Enum.map 1..length, fn(_) -> new_cell end
   end
 
   def cell_state( generation, last_update, state ) do
@@ -94,13 +94,45 @@ defmodule Conway do
     board.generation board.generation + 1
   end
 
+  @doc """
+  returns a list of tuples in the format:
+  { cell_pid, neighbor_count }
+  """
   def collect_neighbors(board) do
-    { neighbors, acc } = Enum.map_reduce board.field, 0, fn(cell_pid, offset) ->
-      # return { cell_pid, neighbor_count }
-      { { cell_pid, count_neighbors( board, offset ) }, offset + 1 }
+
+    # spawn a bunch of counters, passing self to them
+    # in a receive block, retrieve them all, counting until we have them all
+    # then return the full list
+
+    collector = spawn( Conway, :do_collect_neighbors, [board, self, []])
+
+    Enum.reduce board.field, 0, fn(_cell_pid, offset) ->
+      spawn(Conway, :count_neighbors, [ board, offset, collector ])
+      offset + 1
     end
 
-    neighbors
+    receive do
+      list ->
+        # IO.puts "Got back list: #{ inspect list }"
+        list
+    end
+
+  end
+
+  # acc is a list of the neighbor tuples as { cell_pid, neighbor_count }
+  def do_collect_neighbors( board = Board[width: width ,height: height], callback_pid, acc ) when length(acc) < width * height do
+    receive do
+      { cell_pid, neighbor_count } ->
+        # IO.puts "do_collect_neighbors; got #{ inspect cell_pid } | #{ neighbor_count } | #{ length acc }"
+        do_collect_neighbors( board, callback_pid, [ { cell_pid, neighbor_count } | acc ])
+      anything ->
+        IO.puts "do_collect_neighbors ERROR: #{ anything }"
+        System.halt(2)
+    end
+  end
+
+  def do_collect_neighbors( board, callback_pid, acc) do
+    callback_pid <- acc
   end
 
   def update_state( board, neighbors ) do
@@ -119,7 +151,7 @@ defmodule Conway do
     IO.puts ""
   end
 
-  defp do_print_board( board, [], line ) do
+  defp do_print_board( _board, [], line ) do
     IO.puts Enum.join(line)
   end
 
@@ -134,7 +166,7 @@ defmodule Conway do
 
     cell <- { :state, self }
     receive do
-      { :cell, generation, last_updated, state } ->
+      { :cell, _generation, _last_updated, state } ->
         do_print_board( board, list, [ do_print_cell(state) | line ])
     end
   end
@@ -146,7 +178,7 @@ defmodule Conway do
   @doc """
     given the board and an offset, return the number of neighbors this cell has.
   """
-  def count_neighbors( board, offset ) do
+  def count_neighbors( board, offset, collector ) do
     { width, height, field } = { board.width, board.height, board.field }
 
     # should be an array of pids
@@ -161,8 +193,8 @@ defmodule Conway do
       Enum.at( field, offset_for(offset + width + 1, width, height) )
     ]
 
-    neighbors = Enum.map neighbors, fn(cell_pid) ->
-      cell_pid <- { :state, self }
+    neighbors = Enum.map neighbors, fn(collected_cell_pid) ->
+      collected_cell_pid <- { :state, self }
 
       receive do
         { :cell, _, _, state } ->
@@ -170,9 +202,13 @@ defmodule Conway do
       end
     end
 
-    Enum.count neighbors, fn(x) ->
+    count = Enum.count neighbors, fn(x) ->
       x
     end
+
+    cell_pid = Enum.at( field, offset )
+
+    collector <- { cell_pid, count }
   end
 
   @doc """
