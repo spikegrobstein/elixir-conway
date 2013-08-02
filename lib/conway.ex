@@ -87,18 +87,27 @@ defmodule Conway do
   step through one generation of the board, returning the board with the updated field.
   """
   def step( board ) do
+    neighbors = collect_neighbors( board )
+
+    update_state board, neighbors
+
+    board.generation board.generation + 1
+  end
+
+  def collect_neighbors(board) do
     { neighbors, acc } = Enum.map_reduce board.field, 0, fn(cell_pid, offset) ->
       # return { cell_pid, neighbor_count }
       { { cell_pid, count_neighbors( board, offset ) }, offset + 1 }
     end
 
+    neighbors
+  end
+
+  def update_state( board, neighbors ) do
     Enum.each neighbors, fn( {cell_pid, neighbor_count } ) ->
       cell_pid <- { :neighbors, board.generation, neighbor_count }
     end
-
-    board.generation board.generation + 1
   end
-
 
   @doc """
   go through board, spit out rows with either * or _ for live for dead cells, repectively
