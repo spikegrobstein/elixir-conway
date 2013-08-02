@@ -24,6 +24,7 @@ defmodule Conway do
 
   """
   def generate_board( width, height ) do
+    :random.seed :erlang.now
     field = build_field( width * height )
 
     Board.new width: width, height: height, field: field
