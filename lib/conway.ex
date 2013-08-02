@@ -10,7 +10,7 @@ defmodule Conway do
   @default_width 10
   @default_height 10
 
-  defrecord Board, width: 0, height: 0, field: nil
+  defrecord Board, width: 0, height: 0, generation: 1, field: nil
 
   @doc """
   return a Board record with the default width and height
@@ -24,26 +24,50 @@ defmodule Conway do
 
   """
   def generate_board( width, height ) do
-    field = build_field( width * height, [] )
+    field = build_field( width * height )
 
     Board.new width: width, height: height, field: field
   end
 
   # return a list of true/false cells for the given length.
-  def build_field( length, acc ) when length > 0 do
-    build_field length - 1, [ new_cell( length(acc) ) | acc ]
+  def build_field( length ) when length > 0 do
+    Enum.map 1..length, fn(x) -> new_cell end
   end
 
-  def build_field( 0, acc ) do
-    acc
+  def cell_state( generation, last_update, state ) do
+    receive do
+      { :state, sender } ->
+        sender <- { :cell, generation, last_update, state }
+        cell_state( generation, last_update, state )
+
+      { :neighbors, current_generation, count } ->
+        # should probably send the state back to the sender so I don't need to query manually
+        if current_generation > generation do
+          # if it's a new generation
+          new_state = apply_rule( state, count )
+          new_last_update = if state == new_state do
+              last_update
+            else
+              current_generation
+            end
+
+          cell_state current_generation, new_last_update, new_state
+        else
+          # it's a repeat of an old generation, so don't do anything
+          cell_state generation, last_update, state
+        end
+      anything ->
+        IO.puts "Got bullshit in cell_state: #{ inspect anything }"
+        System.halt(1)
+    end
   end
 
 
   # returns a tuple representing a cell and assigns it the given index (for sorting in the field)
   # tuple is in format of:
   # { :cell, index, true||false }
-  defp new_cell( index ) do
-    { :cell, index, :random.uniform > 0.5 }
+  defp new_cell do
+    spawn(Conway, :cell_state, [ 0, 0, :random.uniform > 0.5 ])
   end
 
   @doc """
@@ -63,29 +87,25 @@ defmodule Conway do
   step through one generation of the board, returning the board with the updated field.
   """
   def step( board ) do
-    field = do_step( board, board.field, [] )
-    board.field field
+    { neighbors, acc } = Enum.map_reduce board.field, 0, fn(cell_pid, offset) ->
+      # return { cell_pid, neighbor_count }
+      { { cell_pid, count_neighbors( board, offset ) }, offset + 1 }
+    end
+
+    Enum.each neighbors, fn( {cell_pid, neighbor_count } ) ->
+      cell_pid <- { :neighbors, board.generation, neighbor_count }
+    end
+
+    board.generation board.generation + 1
   end
 
-  defp do_step( _board, [], acc ) do
-    Enum.reverse acc
-  end
-
-  defp do_step( board, [ current | field ], acc ) do
-    { :cell, index, state } = current
-
-    updated_cell_state = apply_rule( state, count_neighbors( board, length(acc) ))
-
-    cell = { :cell, index, updated_cell_state }
-
-    do_step board, field, [ cell | acc ]
-  end
 
   @doc """
   go through board, spit out rows with either * or _ for live for dead cells, repectively
   """
   def print_board( board ) do
     do_print_board( board, board.field, [] )
+    IO.puts "G: #{ board.generation }"
     IO.puts ""
     IO.puts ""
   end
@@ -103,12 +123,16 @@ defmodule Conway do
       line
     end
 
-    do_print_board( board, list, [ do_print_cell(cell) | line ])
+    cell <- { :state, self }
+    receive do
+      { :cell, generation, last_updated, state } ->
+        do_print_board( board, list, [ do_print_cell(state) | line ])
+    end
   end
 
   # cell characters.
-  defp do_print_cell( { :cell, _, true } ), do: '*'
-  defp do_print_cell( { :cell, _, false } ), do: '_'
+  defp do_print_cell( true ), do: '*'
+  defp do_print_cell( false ), do: '_'
 
   @doc """
     given the board and an offset, return the number of neighbors this cell has.
@@ -116,6 +140,7 @@ defmodule Conway do
   def count_neighbors( board, offset ) do
     { width, height, field } = { board.width, board.height, board.field }
 
+    # should be an array of pids
     neighbors = [
       Enum.at( field, offset_for(offset - width - 1, width, height) ),
       Enum.at( field, offset_for(offset - width, width, height) ),
@@ -127,9 +152,17 @@ defmodule Conway do
       Enum.at( field, offset_for(offset + width + 1, width, height) )
     ]
 
+    neighbors = Enum.map neighbors, fn(cell_pid) ->
+      cell_pid <- { :state, self }
+
+      receive do
+        { :cell, _, _, state } ->
+          state
+      end
+    end
+
     Enum.count neighbors, fn(x) ->
-      { :cell, _index, state } = x
-      state
+      x
     end
   end
 
