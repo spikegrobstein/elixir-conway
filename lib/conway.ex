@@ -146,28 +146,31 @@ defmodule Conway do
   """
   def print_board( board ) do
     do_print_board( board, board.field, [] )
+  end
+
+  defp do_print_board( board, [], output ) do
+    output
+      |> Enum.reverse
+      |> Enum.join
+      |> IO.puts
     IO.puts "G: #{ board.generation }"
     IO.puts ""
     IO.puts ""
   end
-
-  defp do_print_board( _board, [], line ) do
-    IO.puts Enum.join(line)
-  end
-
-  defp do_print_board( board, [ cell | list ], line) do
+  
+  # 1234567890N
+  defp do_print_board( board, [ cell | list ], output) do
     # print the line and set line to empty list if it's the width of the board.
-    line = if length(line) == board.width do
-      IO.puts Enum.join(line)
-      []
+    output = if rem(length(output) + 1, board.width + 1) == 0 do
+      [ "\n" | output ]
     else
-      line
+      output
     end
 
     cell <- { :state, self }
     receive do
       { :cell, _generation, _last_updated, state } ->
-        do_print_board( board, list, [ do_print_cell(state) | line ])
+        do_print_board( board, list, [ do_print_cell(state) | output ])
     end
   end
 
