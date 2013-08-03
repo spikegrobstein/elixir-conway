@@ -219,18 +219,15 @@ defmodule Conway do
       Enum.at( field, offset_for(offset + width + 1, width, height) )
     ]
 
-    neighbors = Enum.map neighbors, fn(collected_cell_pid) ->
+    count = Enum.reduce neighbors, 0, fn(collected_cell_pid, acc) ->
       collected_cell_pid <- { :state, self }
 
       receive do
-        { :cell, _, _, state } ->
-          state
+        { :cell, _, _, true } ->
+          acc + 1
+        { :cell, _, _, false } ->
+          acc
       end
-    end
-
-    # do the actual counting
-    count = Enum.count neighbors, fn(x) ->
-      x
     end
 
     collector <- { cell_pid, count }
