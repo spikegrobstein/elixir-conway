@@ -71,7 +71,7 @@ defmodule Conway do
 
         cell_state current_generation, new_last_update, new_state
 
-      { :neighbors, current_generation, count } ->
+      { :neighbors, _current_generation, _count } ->
         # it's a repeat of an old generation, so don't do anything
         cell_state generation, last_update, state
 
@@ -154,7 +154,7 @@ defmodule Conway do
     end
   end
 
-  def do_collect_neighbors( board, callback_pid, acc) do
+  def do_collect_neighbors( _board, callback_pid, acc) do
     callback_pid <- acc
   end
 
@@ -207,21 +207,19 @@ defmodule Conway do
   def count_neighbors( board, offset, cell_pid, collector ) do
     { width, height, field } = { board.width, board.height, board.field }
 
+    
+
     # should be an array of pids
-    neighbors = [
-      Enum.at( field, offset_for(offset - width - 1, width, height) ),
-      Enum.at( field, offset_for(offset - width, width, height) ),
-      Enum.at( field, offset_for(offset - width + 1, width, height) ),
-      Enum.at( field, offset_for(offset - 1, width, height) ),
-      Enum.at( field, offset_for(offset + 1, width, height) ),
-      Enum.at( field, offset_for(offset + width - 1, width, height) ),
-      Enum.at( field, offset_for(offset + width, width, height) ),
-      Enum.at( field, offset_for(offset + width + 1, width, height) )
-    ]
+    neighbors = neighbor_offsets( offset, width, height )
+      |> Enum.map fn( offset ) -> Enum.at( field, offset ) end
+
 
     count = Enum.reduce neighbors, 0, fn(collected_cell_pid, acc) ->
       collected_cell_pid <- { :state, self }
 
+      # count up the neighbors;
+      # increment accumulator when cell is alive
+      # don't touch the accumulator when cell is dead
       receive do
         { :cell, _, _, true } ->
           acc + 1
@@ -234,12 +232,53 @@ defmodule Conway do
   end
 
   @doc """
-  given the board and an offset, return the offset in the board.field for the given offset
+  given the board's dimensions and an offset, return the offset in the board.field for the given offset
   this is where wrapping of the board is handled.
   """
-  def offset_for( offset, width, height ) when offset < 0, do: ( (width * height) + offset )
-  def offset_for( offset, width, height ) when offset > (width * height - 1), do: ( offset - (width * height) )
-  def offset_for( offset, _, _ ), do: offset
+
+  # 00 01 02 03 04
+  # 05 06 07 08 09
+  # 10 11 12 13 14
+  # 15 16 17 18 19
+
+  def offset_to_xy( offset, width, _height ), do: { rem( offset, width ), div( offset, width ) }
+
+  # translate an x,width or y,height to wrapping x or y
+  def tr_coord( coord, dimension ) when coord >= 0 and coord < dimension, do: coord
+  def tr_coord( coord, dimension ) when coord == dimension,               do: 0
+  def tr_coord( -1, dimension ),                                          do: dimension - 1
+
+  def xy_to_offset( x, y, width, height ) do
+    x = tr_coord( x, width )
+    y = tr_coord( y, height )
+
+    x + ( y * width )
+  end
+
+  # return a list of neighbor offsets for the given offset
+  def neighbor_offsets( offset, width, height ) do
+    neighbor_coords( offset, width, height )
+      |> Enum.map fn( { x, y } ) -> xy_to_offset( x, y, width, height ) end
+  end
+
+  def neighbor_coords( offset, width, height ) do
+    { x, y } = offset_to_xy( offset, width, height )
+
+    neighbor_coords( x, y )
+  end
+
+  def neighbor_coords( x, y ) do
+    [
+      { x - 1, y - 1 },
+      { x, y - 1 },
+      { x + 1, y - 1 },
+      { x - 1, y },
+      { x + 1, y },
+      { x - 1, y + 1 },
+      { x, y + 1 },
+      { x + 1, y + 1 }
+    ]
+  end
 
   # the actual rules for the game.
   def apply_rule( true, neighbor_count ) when neighbor_count < 2, do: false
