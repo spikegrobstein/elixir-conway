@@ -10,6 +10,9 @@ defmodule Conway do
   @default_width 10
   @default_height 10
 
+  # the conway life board
+  # has a width, a height, generation counter and a field
+  # field is a list of `cell_state` pids
   defrecord Board, width: 0, height: 0, generation: 1, field: nil
 
   @doc """
@@ -20,11 +23,14 @@ defmodule Conway do
   end
 
   @doc """
-    returns a board Record
+    returns a board Record with the given dimensions
 
   """
   def generate_board( width, height ) do
+    # seed the random number generator with a timestamp
     :random.seed :erlang.now
+
+    # create the field
     field = build_field( width * height )
 
     Board.new width: width, height: height, field: field
@@ -35,28 +41,32 @@ defmodule Conway do
     Enum.map 1..length, fn(_) -> new_cell end
   end
 
+  @doc"""
+  a process, called via spawn(), that tracks individual cell's states
+  messages are sent to it to either query it's state, using the `:state` tuple
+  or telling it to update its state using the `:neighbors` tuple.
+  """
   def cell_state( generation, last_update, state ) do
     receive do
       { :state, sender } ->
         sender <- { :cell, generation, last_update, state }
         cell_state( generation, last_update, state )
 
-      { :neighbors, current_generation, count } ->
+      { :neighbors, current_generation, count } when current_generation > generation ->
+        # if it's a new generation
         # should probably send the state back to the sender so I don't need to query manually
-        if current_generation > generation do
-          # if it's a new generation
-          new_state = apply_rule( state, count )
-          new_last_update = if state == new_state do
-              last_update
-            else
-              current_generation
-            end
+        new_state = apply_rule( state, count )
+        new_last_update = if state == new_state do
+            last_update
+          else
+            current_generation
+          end
 
-          cell_state current_generation, new_last_update, new_state
-        else
-          # it's a repeat of an old generation, so don't do anything
-          cell_state generation, last_update, state
-        end
+        cell_state current_generation, new_last_update, new_state
+
+      { :neighbors, current_generation, count } when current_generation <= generation ->
+        # it's a repeat of an old generation, so don't do anything
+        cell_state generation, last_update, state
       anything ->
         IO.puts "Got bullshit in cell_state: #{ inspect anything }"
         System.halt(1)
