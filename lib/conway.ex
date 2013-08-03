@@ -45,6 +45,13 @@ defmodule Conway do
   a process, called via spawn(), that tracks individual cell's states
   messages are sent to it to either query it's state, using the `:state` tuple
   or telling it to update its state using the `:neighbors` tuple.
+
+  `generation` keeps track of this cell's current generation to prevent
+  false updates when receiving messages more than once
+
+  `last_update` keeps track of the last generation that this cell updated
+
+  `state` is a boolean of whether this cell is alive or not.
   """
   def cell_state( generation, last_update, state ) do
     receive do
@@ -64,7 +71,7 @@ defmodule Conway do
 
         cell_state current_generation, new_last_update, new_state
 
-      { :neighbors, current_generation, count } when current_generation <= generation ->
+      { :neighbors, current_generation, count } ->
         # it's a repeat of an old generation, so don't do anything
         cell_state generation, last_update, state
       anything ->
