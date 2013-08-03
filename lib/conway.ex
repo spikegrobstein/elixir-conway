@@ -207,28 +207,29 @@ defmodule Conway do
   def count_neighbors( board, offset, cell_pid, collector ) do
     { width, height, field } = { board.width, board.height, board.field }
 
-    
+    count = do_count_neighbors( field, offset, width, height )
 
-    # should be an array of pids
+    collector <- { cell_pid, count }
+  end
+
+  def do_count_neighbors( field, offset, width, height ) do
     neighbors = neighbor_offsets( offset, width, height )
       |> Enum.map fn( offset ) -> Enum.at( field, offset ) end
 
+    Enum.reduce neighbors, 0, fn(collected_cell_pid, acc) ->
+          collected_cell_pid <- { :state, self }
 
-    count = Enum.reduce neighbors, 0, fn(collected_cell_pid, acc) ->
-      collected_cell_pid <- { :state, self }
+          # count up the neighbors;
+          # increment accumulator when cell is alive
+          # don't touch the accumulator when cell is dead
+          receive do
+            { :cell, _, _, true } ->
+              acc + 1
+            { :cell, _, _, false } ->
+              acc
+          end
+        end
 
-      # count up the neighbors;
-      # increment accumulator when cell is alive
-      # don't touch the accumulator when cell is dead
-      receive do
-        { :cell, _, _, true } ->
-          acc + 1
-        { :cell, _, _, false } ->
-          acc
-      end
-    end
-
-    collector <- { cell_pid, count }
   end
 
   @doc """
