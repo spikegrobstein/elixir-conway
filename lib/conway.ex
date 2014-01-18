@@ -56,7 +56,7 @@ defmodule Conway do
   def cell_state( generation, last_update, state ) do
     receive do
       { :state, sender } ->
-        sender <- { :cell, generation, last_update, state }
+        send sender, { :cell, generation, last_update, state }
         cell_state( generation, last_update, state )
 
       { :neighbors, current_generation, count } when current_generation > generation ->
@@ -155,12 +155,12 @@ defmodule Conway do
   end
 
   def do_collect_neighbors( _board, callback_pid, acc) do
-    callback_pid <- acc
+    send callback_pid, acc
   end
 
   def update_state( board, neighbors ) do
     Enum.each neighbors, fn( {cell_pid, neighbor_count } ) ->
-      cell_pid <- { :neighbors, board.generation, neighbor_count }
+      send cell_pid, { :neighbors, board.generation, neighbor_count }
     end
   end
 
@@ -190,7 +190,7 @@ defmodule Conway do
       output
     end
 
-    cell <- { :state, self }
+    send cell, { :state, self }
     receive do
       { :cell, _generation, _last_updated, state } ->
         do_print_board( board, list, [ do_print_cell(state) | output ])
@@ -209,7 +209,7 @@ defmodule Conway do
 
     count = do_count_neighbors( field, offset, width, height )
 
-    collector <- { cell_pid, count }
+    send collector, { cell_pid, count }
   end
 
   def do_count_neighbors( field, offset, width, height ) do
@@ -217,7 +217,7 @@ defmodule Conway do
       |> Enum.map fn( offset ) -> Enum.at( field, offset ) end
 
     Enum.reduce neighbors, 0, fn(collected_cell_pid, acc) ->
-          collected_cell_pid <- { :state, self }
+          send collected_cell_pid, { :state, self }
 
           # count up the neighbors;
           # increment accumulator when cell is alive

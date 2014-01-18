@@ -4,7 +4,7 @@ defmodule Conway.Mixfile do
   def project do
     [ app: :conway,
       version: "0.0.1",
-      elixir: "~> 0.10.0",
+      elixir: "~> 0.12.0",
       deps: deps ]
   end
 
